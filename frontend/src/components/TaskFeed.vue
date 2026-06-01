@@ -299,7 +299,7 @@ const displayGroups = computed(() => {
   }
 
   const ongoing = filtered.filter(t => ['ongoing', 'blocked'].includes(t.status)).sort((a,b) => getTaskOrder(b) - getTaskOrder(a));
-  const notStarted = filtered.filter(t => ['notstarted'].includes(t.status)).sort((a,b) => getTaskOrder(b) - getTaskOrder(a));
+  const notStarted = filtered.filter(t => ['notstarted'].includes(t.status)).sort((a,b) => getTaskOrder(a) - getTaskOrder(b));
   const completed = filtered.filter(t => ['completed', 'rejected'].includes(t.status)).sort((a,b) => getTaskOrder(b) - getTaskOrder(a));
 
   const groups = [];
