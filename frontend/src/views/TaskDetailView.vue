@@ -304,7 +304,7 @@
               @keydown.ctrl.enter="submitReply"
               rows="1"
               :disabled="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending')"
-              :placeholder="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending') ? 'Waiting for agent...' : 'Type instructions... (⌘Enter to send)'"
+              :placeholder="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending') ? 'Waiting for agent...' : 'Type instructions... (Cmd ⌘ + Enter to send)'"
               class="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 text-[13px] font-medium text-gray-800 dark:text-zinc-200 bg-transparent outline-none placeholder-gray-400 dark:placeholder-zinc-500 disabled:opacity-50 resize-none min-h-[46px] max-h-[150px] custom-scrollbar"
             ></textarea>
             <button type="button" @click="$refs.fileInput.click()"
