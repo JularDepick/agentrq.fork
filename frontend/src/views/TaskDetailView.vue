@@ -292,35 +292,49 @@
       </div>
 
       <form @submit.prevent="submitReply">
-        <div class="flex items-end gap-1.5 sm:gap-2 w-full flex-nowrap">
-          <input type="file" ref="fileInput" multiple class="hidden" @change="handleFileUpload" />
+        <input type="file" ref="fileInput" multiple class="hidden" @change="handleFileUpload" />
 
-          <div class="flex-1 flex items-center bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-sm focus-within:border-gray-900 dark:focus-within:border-white focus-within:ring-0 transition-all group relative min-w-0 shadow-sm">
-            <textarea
-              ref="textareaRef"
-              v-model="replyText"
-              @input="adjustTextareaHeight"
-              @keydown.meta.enter="submitReply"
-              @keydown.ctrl.enter="submitReply"
-              rows="1"
-              :disabled="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending')"
-              :placeholder="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending') ? 'Waiting for agent...' : 'Type instructions... (Cmd ⌘ + Enter to send)'"
-              class="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 text-[13px] font-medium text-gray-800 dark:text-zinc-200 bg-transparent outline-none placeholder-gray-400 dark:placeholder-zinc-500 disabled:opacity-50 resize-none min-h-[46px] max-h-[150px] custom-scrollbar"
-            ></textarea>
-            <button type="button" @click="$refs.fileInput.click()"
-                    :disabled="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending')"
-                    class="h-[46px] px-2 sm:px-3 text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-zinc-50 transition-colors flex items-center justify-center disabled:opacity-30 self-end">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+        <div class="flex flex-col bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-sm focus-within:border-gray-900 dark:focus-within:border-white focus-within:ring-0 transition-all group relative min-w-0 shadow-sm">
+          <!-- Textarea on top -->
+          <textarea
+            ref="textareaRef"
+            v-model="replyText"
+            @input="adjustTextareaHeight"
+            @keydown.meta.enter="submitReply"
+            @keydown.ctrl.enter="submitReply"
+            rows="1"
+            :disabled="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending')"
+            :placeholder="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending') ? 'Waiting for agent...' : 'Type instructions... (Cmd ⌘ + Enter to send)'"
+            class="w-full px-3.5 pt-3 pb-1.5 text-[13px] font-medium text-gray-800 dark:text-zinc-200 bg-transparent outline-none border-none focus:outline-none focus:ring-0 disabled:opacity-50 resize-none min-h-[46px] max-h-[150px] custom-scrollbar"
+          ></textarea>
+
+          <!-- Bottom Toolbar -->
+          <div class="flex items-center justify-between px-3 pb-2 pt-1">
+            <!-- Left actions (Attachment paperclip & Mode info badge) -->
+            <div class="flex items-center gap-2">
+              <button type="button" @click="$refs.fileInput.click()"
+                      :disabled="(!workspace.agentConnected && task.assignee !== 'human' && task.status !== 'pending')"
+                      class="h-7 w-7 rounded-sm text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-50 hover:bg-gray-105 dark:hover:bg-zinc-700 transition-colors flex items-center justify-center disabled:opacity-30"
+                      title="Attach files">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                </svg>
+              </button>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-gray-105 dark:bg-zinc-700/50 text-[9px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+                {{ task.assignee === 'agent' ? 'Agent' : 'Human' }} Mode
+              </span>
+            </div>
+
+            <!-- Right circular send button -->
+            <button type="submit"
+                    :disabled="(!replyText.trim() && replyAttachments.length === 0) || (task.assignee !== 'human' && (!workspace.agentConnected || task.status === 'notstarted' || task.status === 'pending'))"
+                    class="h-7 w-7 rounded-full bg-black dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-30 transition-all flex items-center justify-center shrink-0 shadow-sm"
+                    title="Send Message">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
             </button>
           </div>
-           <button type="submit"
-                   :disabled="(!replyText.trim() && replyAttachments.length === 0) || (task.assignee !== 'human' && (!workspace.agentConnected || task.status === 'notstarted' || task.status === 'pending'))"
-                   class="h-[46px] w-[46px] rounded-sm bg-gray-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-100 shadow-sm disabled:opacity-30 transition-all shrink-0 flex items-center justify-center"
-                   title="Send Message">
-             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-               <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-             </svg>
-           </button>
         </div>
 
         <!-- Status Warning Messages -->
