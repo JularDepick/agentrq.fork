@@ -17,6 +17,7 @@ import (
 	"github.com/agentrq/agentrq/backend/internal/controller/mcp"
 	"github.com/agentrq/agentrq/backend/internal/controller/notification"
 	"github.com/agentrq/agentrq/backend/internal/controller/pub"
+	pushctrl "github.com/agentrq/agentrq/backend/internal/controller/push"
 	slackctrl "github.com/agentrq/agentrq/backend/internal/controller/slack"
 	"github.com/agentrq/agentrq/backend/internal/controller/telemetry"
 	entity "github.com/agentrq/agentrq/backend/internal/data/entity/crud"
@@ -77,8 +78,9 @@ type (
 			WorkspaceTokenKey string `yaml:"workspaceTokenKey"`
 		} `yaml:"auth"`
 		SMTP      smtp.Config     `yaml:"smtp"`
-		Slack     slacksvc.Config `yaml:"slack"`
-		Ddos      struct {
+		Slack    slacksvc.Config  `yaml:"slack"`
+		WebPush  pushctrl.Config  `yaml:"webPush"`
+		Ddos     struct {
 			Enabled              bool          `yaml:"enabled"`
 			MaxRequestsPerSecond int           `yaml:"maxRequestsPerSecond"`
 			BlockDuration        time.Duration `yaml:"blockDuration"`
@@ -132,6 +134,7 @@ func New(cfg Config) (*App, error) {
 		&model.User{},
 		&model.SlackWorkspaceLink{},
 		&model.SlackTaskThread{},
+		&model.PushSubscription{},
 	); err != nil {
 		return nil, fmt.Errorf("migrate db: %w", err)
 	}
@@ -520,6 +523,16 @@ func New(cfg Config) (*App, error) {
 		zlog.Error().Err(err).Msg("failed to start notification controller")
 	}
 
+	pushCtrl := pushctrl.New(pushctrl.Params{
+		Config:     cfg.WebPush,
+		Repository: repo,
+		PubSub:     pubsubSvc,
+		IDGen:      ids,
+	})
+	if err := pushCtrl.Start(context.Background()); err != nil {
+		zlog.Error().Err(err).Msg("failed to start push controller")
+	}
+
 	// Central PubSub to EventBus SSE Forwarder
 	go func() {
 		sub, err := pubsubSvc.Subscribe(context.Background(), pubsub.SubscribeRequest{
@@ -670,6 +683,7 @@ func New(cfg Config) (*App, error) {
 		RootToken:        cfg.Auth.RootAccessToken,
 		Router:           apiGroup,
 		SlackCtrl:        slackCtrl,
+		PushCtrl:         pushCtrl,
 	}); err != nil {
 		return nil, fmt.Errorf("api handler: %w", err)
 	}
