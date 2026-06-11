@@ -1,5 +1,29 @@
 <template>
   <div id="app" class="flex flex-col md:flex-row h-[100dvh] bg-zinc-100 dark:bg-zinc-950 font-inter overflow-hidden">
+
+    <!-- PWA Update Banner -->
+    <Transition name="slide-down">
+      <div v-if="needRefresh"
+           class="fixed top-0 inset-x-0 z-[200] flex items-center justify-between gap-3 px-4 py-2.5 bg-black text-white text-xs font-medium shadow-lg">
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 shrink-0 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>A new version of AgentRQ is available.</span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button @click="updateServiceWorker()"
+                  class="px-3 py-1 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-gray-100 active:scale-95 transition-all">
+            Update now
+          </button>
+          <button @click="needRefresh = false" class="text-gray-400 hover:text-white transition-colors p-0.5" title="Dismiss">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </Transition>
     
     <!-- Global Mobile Menu Toggle (Bottom Floating Action) -->
     <button v-if="!isLoginPage" 
@@ -164,6 +188,11 @@
         <!-- Sidebar Footer -->
         <div class="mt-auto p-4">
 
+          <!-- App Version -->
+          <div v-if="!isCollapsed || isMobileMenuOpen" class="px-2 mb-3">
+            <span class="text-[10px] text-gray-400 dark:text-zinc-600 font-mono">v{{ appVersion }}</span>
+          </div>
+
           <!-- User Profile -->
           <div class="relative pt-3 border-t border-gray-300/50 dark:border-zinc-600/50 mt-2 overflow-visible">
             <!-- User Menu Popover -->
@@ -257,6 +286,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useRegisterSW } from 'virtual:pwa-register/vue'
 import { fetchUser, fetchWorkspaces } from './api'
 import { useToasts } from './composables/useToasts'
 import { useEventBus } from './useEventBus'
@@ -266,6 +296,9 @@ import { useWorkspaceStore } from './stores/workspaceStore'
 import { useFormat } from './composables/useFormat'
 import { usePushNotifications } from './composables/usePushNotifications'
 import Toast from './components/Toast.vue'
+
+const appVersion = __APP_VERSION__
+const { needRefresh, updateServiceWorker } = useRegisterSW()
 
 const { toKebabCase } = useFormat()
 
@@ -391,3 +424,15 @@ watch(isLoginPage, (val) => {
   }
 })
 </script>
+
+<style scoped>
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.slide-down-enter-from,
+.slide-down-leave-to {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+</style>

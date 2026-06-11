@@ -1,4 +1,8 @@
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
+})
 import { registerRoute } from 'workbox-routing'
 import { NetworkFirst } from 'workbox-strategies'
 import { CacheableResponsePlugin } from 'workbox-cacheable-response'
