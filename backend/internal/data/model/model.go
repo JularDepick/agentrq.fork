@@ -94,13 +94,13 @@ type (
 		AutoCreated      bool   `gorm:"default:false"` // true if created automatically on workspace creation
 	}
 
-	// PushSubscription stores a Web Push subscription for a user.
+	// PushSubscription stores a Web Push subscription for a user per workspace.
 	PushSubscription struct {
 		ID          int64 `gorm:"primaryKey;autoIncrement:false"`
 		CreatedAt   time.Time
 		UserID      int64  `gorm:"index:idx_push_subscriptions_user_id"`
-		WorkspaceID int64  `gorm:"index:idx_push_subscriptions_workspace_id"`
-		Endpoint    string `gorm:"type:text;uniqueIndex"`
+		WorkspaceID int64  `gorm:"index:idx_push_subscriptions_workspace_id;uniqueIndex:idx_push_endpoint_workspace"`
+		Endpoint    string `gorm:"type:text;uniqueIndex:idx_push_endpoint_workspace"`
 		P256dh      string `gorm:"type:text"`
 		Auth        string `gorm:"type:varchar(64)"`
 		UserAgent   string `gorm:"type:varchar(255)"`

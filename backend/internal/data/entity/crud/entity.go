@@ -407,6 +407,18 @@ type (
 		UserID   int64
 		Endpoint string
 	}
+
+	CheckPushSubscriptionRequest struct {
+		UserID      int64
+		WorkspaceID int64
+		Endpoint    string
+	}
+
+	DeletePushSubscriptionByWorkspaceRequest struct {
+		UserID      int64
+		WorkspaceID int64
+		Endpoint    string
+	}
 )
 
 const (

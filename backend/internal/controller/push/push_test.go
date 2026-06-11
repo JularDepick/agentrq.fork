@@ -140,6 +140,58 @@ func TestDeleteSubscription(t *testing.T) {
 	}
 }
 
+// ── DeleteSubscriptionByWorkspace ────────────────────────────────────────────
+
+func TestDeleteSubscriptionByWorkspace(t *testing.T) {
+	c, mockRepo, _ := newTestController(t, Config{})
+	mockRepo.EXPECT().DeletePushSubscriptionByWorkspace(gomock.Any(), int64(5), int64(10), "https://push.example.com/sub").Return(nil)
+
+	err := c.DeleteSubscriptionByWorkspace(context.Background(), entity.DeletePushSubscriptionByWorkspaceRequest{
+		UserID:      5,
+		WorkspaceID: 10,
+		Endpoint:    "https://push.example.com/sub",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// ── CheckSubscription ────────────────────────────────────────────────────────
+
+func TestCheckSubscription_Subscribed(t *testing.T) {
+	c, mockRepo, _ := newTestController(t, Config{})
+	mockRepo.EXPECT().GetPushSubscriptionForWorkspace(gomock.Any(), int64(1), int64(10), "https://push.example.com/sub").Return(true, nil)
+
+	subscribed, err := c.CheckSubscription(context.Background(), entity.CheckPushSubscriptionRequest{
+		UserID:      1,
+		WorkspaceID: 10,
+		Endpoint:    "https://push.example.com/sub",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !subscribed {
+		t.Error("expected subscribed=true")
+	}
+}
+
+func TestCheckSubscription_NotSubscribed(t *testing.T) {
+	c, mockRepo, _ := newTestController(t, Config{})
+	mockRepo.EXPECT().GetPushSubscriptionForWorkspace(gomock.Any(), int64(1), int64(10), "https://push.example.com/sub").Return(false, nil)
+
+	subscribed, err := c.CheckSubscription(context.Background(), entity.CheckPushSubscriptionRequest{
+		UserID:      1,
+		WorkspaceID: 10,
+		Endpoint:    "https://push.example.com/sub",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if subscribed {
+		t.Error("expected subscribed=false")
+	}
+}
+
 // ── subscriptionAllowsType ───────────────────────────────────────────────────
 
 func TestSubscriptionAllowsType(t *testing.T) {

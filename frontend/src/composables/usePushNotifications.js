@@ -16,6 +16,33 @@ async function fetchVAPIDPublicKey() {
   return data.publicKey || null
 }
 
+async function getOrCreateBrowserSubscription(publicKey) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null
+  const permission = await Notification.requestPermission()
+  if (permission !== 'granted') return null
+  try {
+    const reg = await navigator.serviceWorker.ready
+    const existing = await reg.pushManager.getSubscription()
+    if (existing) return existing
+    return await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    })
+  } catch {
+    return null
+  }
+}
+
+async function getBrowserSubscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null
+  try {
+    const reg = await navigator.serviceWorker.ready
+    return await reg.pushManager.getSubscription()
+  } catch {
+    return null
+  }
+}
+
 async function saveSubscription(subscription, workspaceId) {
   const key = subscription.getKey('p256dh')
   const auth = subscription.getKey('auth')
@@ -41,29 +68,22 @@ async function deleteSubscription(endpoint) {
   })
 }
 
+async function deleteSubscriptionByWorkspace(endpoint, workspaceId) {
+  await fetch('/api/v1/push/subscription', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, workspaceId }),
+  })
+}
+
 export function usePushNotifications() {
   async function subscribe(workspaceId) {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
-
-    const permission = await Notification.requestPermission()
-    if (permission !== 'granted') return
-
     const publicKey = await fetchVAPIDPublicKey()
     if (!publicKey) return
 
     try {
-      const reg = await navigator.serviceWorker.ready
-      const existing = await reg.pushManager.getSubscription()
-      if (existing) {
-        await saveSubscription(existing, workspaceId)
-        isSubscribed.value = true
-        return
-      }
-
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      })
+      const subscription = await getOrCreateBrowserSubscription(publicKey)
+      if (!subscription) return
       await saveSubscription(subscription, workspaceId)
       isSubscribed.value = true
     } catch {
@@ -72,10 +92,8 @@ export function usePushNotifications() {
   }
 
   async function unsubscribe() {
-    if (!('serviceWorker' in navigator)) return
     try {
-      const reg = await navigator.serviceWorker.ready
-      const sub = await reg.pushManager.getSubscription()
+      const sub = await getBrowserSubscription()
       if (!sub) return
       await deleteSubscription(sub.endpoint)
       await sub.unsubscribe()
@@ -85,5 +103,43 @@ export function usePushNotifications() {
     }
   }
 
-  return { subscribe, unsubscribe, isSubscribed }
+  async function checkWorkspaceSubscription(workspaceId) {
+    if (!workspaceId) return false
+    try {
+      const sub = await getBrowserSubscription()
+      if (!sub) return false
+      const params = new URLSearchParams({ workspaceId, endpoint: sub.endpoint })
+      const res = await fetch(`/api/v1/push/subscription?${params}`)
+      if (!res.ok) return false
+      const data = await res.json()
+      return data.subscribed === true
+    } catch {
+      return false
+    }
+  }
+
+  async function subscribeWorkspace(workspaceId) {
+    const publicKey = await fetchVAPIDPublicKey()
+    if (!publicKey) return false
+    try {
+      const subscription = await getOrCreateBrowserSubscription(publicKey)
+      if (!subscription) return false
+      await saveSubscription(subscription, workspaceId)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function unsubscribeWorkspace(workspaceId) {
+    try {
+      const sub = await getBrowserSubscription()
+      if (!sub) return
+      await deleteSubscriptionByWorkspace(sub.endpoint, workspaceId)
+    } catch {
+      // Silently ignore
+    }
+  }
+
+  return { subscribe, unsubscribe, isSubscribed, checkWorkspaceSubscription, subscribeWorkspace, unsubscribeWorkspace }
 }

@@ -347,13 +347,12 @@ async function logout() {
 
 const loadWorkspaces = () => workspaceStore.fetchWorkspaces()
 
-const { subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications()
+const { unsubscribe: unsubscribePush } = usePushNotifications()
 
 const loadUser = async () => {
   if (isLoginPage.value) return;
   try {
     user.value = await fetchUser()
-    subscribePush()
   } catch (err) {
     console.error('Failed to fetch user:', err)
   }

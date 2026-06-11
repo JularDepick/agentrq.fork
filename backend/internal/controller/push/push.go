@@ -34,6 +34,8 @@ type (
 		Start(ctx context.Context) error
 		SaveSubscription(ctx context.Context, req entity.SavePushSubscriptionRequest) error
 		DeleteSubscription(ctx context.Context, req entity.DeletePushSubscriptionRequest) error
+		DeleteSubscriptionByWorkspace(ctx context.Context, req entity.DeletePushSubscriptionByWorkspaceRequest) error
+		CheckSubscription(ctx context.Context, req entity.CheckPushSubscriptionRequest) (bool, error)
 		VAPIDPublicKey() string
 		IsEnabled() bool
 	}
@@ -92,6 +94,14 @@ func (c *controller) SaveSubscription(ctx context.Context, req entity.SavePushSu
 
 func (c *controller) DeleteSubscription(ctx context.Context, req entity.DeletePushSubscriptionRequest) error {
 	return c.repo.DeletePushSubscription(ctx, req.UserID, req.Endpoint)
+}
+
+func (c *controller) DeleteSubscriptionByWorkspace(ctx context.Context, req entity.DeletePushSubscriptionByWorkspaceRequest) error {
+	return c.repo.DeletePushSubscriptionByWorkspace(ctx, req.UserID, req.WorkspaceID, req.Endpoint)
+}
+
+func (c *controller) CheckSubscription(ctx context.Context, req entity.CheckPushSubscriptionRequest) (bool, error) {
+	return c.repo.GetPushSubscriptionForWorkspace(ctx, req.UserID, req.WorkspaceID, req.Endpoint)
 }
 
 func (c *controller) Start(ctx context.Context) error {

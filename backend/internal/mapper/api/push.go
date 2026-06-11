@@ -45,3 +45,29 @@ func FromVAPIDPublicKeyToHTTPResponse(publicKey string) []byte {
 	b, _ := json.Marshal(view.VAPIDPublicKeyResponse{PublicKey: publicKey})
 	return b
 }
+
+func FromPushSubscriptionStatusToHTTPResponse(subscribed bool) []byte {
+	b, _ := json.Marshal(view.PushSubscriptionStatusResponse{Subscribed: subscribed})
+	return b
+}
+
+func FromHTTPRequestToDeletePushSubscriptionByWorkspaceRequestEntity(c *fiber.Ctx) *entity.DeletePushSubscriptionByWorkspaceRequest {
+	var payload struct {
+		Endpoint    string `json:"endpoint"`
+		WorkspaceID string `json:"workspaceId"`
+	}
+	if err := json.Unmarshal(c.BodyRaw(), &payload); err != nil {
+		return nil
+	}
+	if payload.Endpoint == "" || payload.WorkspaceID == "" {
+		return nil
+	}
+	workspaceID := monoflake.IDFromBase62(payload.WorkspaceID).Int64()
+	if workspaceID == 0 {
+		return nil
+	}
+	return &entity.DeletePushSubscriptionByWorkspaceRequest{
+		Endpoint:    payload.Endpoint,
+		WorkspaceID: workspaceID,
+	}
+}

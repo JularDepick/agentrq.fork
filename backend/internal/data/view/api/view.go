@@ -231,4 +231,8 @@ type (
 	VAPIDPublicKeyResponse struct {
 		PublicKey string `json:"publicKey"`
 	}
+
+	PushSubscriptionStatusResponse struct {
+		Subscribed bool `json:"subscribed"`
+	}
 )

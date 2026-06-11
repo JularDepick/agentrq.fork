@@ -126,6 +126,11 @@ func New(cfg Config) (*App, error) {
 		return nil, errors.New("neither postgres nor sqlite must be enabled in config")
 	}
 
+	// Drop old single-column unique index on push_subscriptions.endpoint — replaced
+	// by composite uniqueIndex(endpoint, workspace_id) to allow one subscription per
+	// browser per workspace.
+	_ = db.Conn(context.Background()).Exec("DROP INDEX IF EXISTS uni_push_subscriptions_endpoint").Error
+
 	if err := db.Conn(context.Background()).AutoMigrate(
 		&model.Workspace{},
 		&model.Task{},
