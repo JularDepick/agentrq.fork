@@ -364,3 +364,20 @@ func TestFindAttachmentMetadata_WrongTask(t *testing.T) {
 		t.Fatal("expected error when querying with wrong task ID")
 	}
 }
+
+func TestFindAttachmentMetadata_WrongWorkspace(t *testing.T) {
+	db, repo := newFindAttachmentDB(t)
+
+	// Task belongs to workspace 200, but we query with workspace 300
+	db.Create(&model.Task{ID: 6, WorkspaceID: 200, UserID: 1})
+	db.Create(&model.Message{
+		ID:          601,
+		TaskID:      6,
+		Attachments: []byte(`[{"id":"att-ws200","filename":"secret.pdf","mimeType":"application/pdf","data":""}]`),
+	})
+
+	_, _, err := repo.FindAttachmentMetadata(context.Background(), 300, 6, "att-ws200")
+	if err == nil {
+		t.Fatal("expected error when workspace ID does not match task's workspace")
+	}
+}

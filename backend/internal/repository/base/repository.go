@@ -360,9 +360,9 @@ func (r *repository) FindAttachmentMetadata(ctx context.Context, workspaceID int
 		}
 	}
 
-	// Check message-level attachments for this task
+	// Check message-level attachments for this task (workspace scope via subquery)
 	var msgs []model.Message
-	err = r.conn(ctx).Where("task_id = ? AND attachments LIKE ?", taskID, likeExpr).Find(&msgs).Error
+	err = r.conn(ctx).Where("task_id IN (SELECT id FROM tasks WHERE id = ? AND workspace_id = ?) AND attachments LIKE ?", taskID, workspaceID, likeExpr).Find(&msgs).Error
 	if err == nil {
 		for _, m := range msgs {
 			var atts []entity.Attachment
