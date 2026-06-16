@@ -2,7 +2,7 @@
 
 ## Overview
 
-AgentRQ is a task orchestration platform that connects human operators and AI agents through a structured, real-time communication layer. Each **workspace** is an isolated execution context with its own dedicated **MCP (Model Context Protocol) server**, and agents connect to workspaces via those servers to receive tasks, send replies, and report status. A supervisor agent — by connecting to multiple workspace MCP servers simultaneously — can coordinate multi-agent workflows across the entire system.
+AgentRQ is a task orchestration platform that connects human operators and AI agents through a structured, real-time communication layer. Each **workspace** is an isolated execution context with its own dedicated **MCP (Model Context Protocol) server**, and agents connect to workspaces via those servers to receive tasks, send replies, and report status. A supervisor agent — by connecting to the **Core MCP server** (`coremcp`) with a single OAuth2-authenticated session — gains cross-workspace visibility and can orchestrate multi-agent workflows by assigning tasks to specialist agents across any number of workspaces.
 
 ---
 
@@ -46,19 +46,49 @@ Each task has a threaded conversation history. Messages record every exchange be
 
 ## MCP Server Layer
 
-### Per-Workspace MCP Servers
+AgentRQ exposes **two distinct MCP server tiers**: the Core MCP server for supervisors and human-level orchestration, and per-workspace MCP servers for specialist worker agents.
+
+### Supervisor MCP Server (`coremcp`)
+
+The Core MCP server is a **single, stateless server** instance accessible at `/mcp` (path-based) or `mcp.{domain}` (host-based). It is the entry point for supervisor agents and any MCP client that needs cross-workspace visibility.
+
+**Authentication** uses OAuth2 with a short-lived access token bearing audience `"coremcp"`. The token encodes the authenticated user's ID (not a workspace token), so every tool call runs in the context of that user's full workspace access.
+
+**User-scope enforcement**: Every coremcp handler extracts the user ID from the JWT context and passes it to the CRUD controller. The controller validates workspace ownership on every operation via `ensureActiveWorkspace(ctx, workspaceID, userID)`, which issues a DB query requiring both the workspace ID and the user's ID to match. A workspace belonging to another user returns a not-found error — cross-user access is impossible regardless of which tool is called.
+
+The coremcp exposes a broad, cross-workspace tool surface:
+
+| Tool | Description |
+|------|-------------|
+| `listWorkspaces(includeArchived?)` | List all user-accessible workspaces; each result includes the workspace's `mcpURL` (the per-workspace MCP endpoint URL) |
+| `createWorkspace(name, description?, ...)` | Create a new workspace |
+| `getWorkspace(id)` | Get a single workspace by ID (with `mcpURL`) |
+| `updateWorkspace(id, ...)` | Update workspace metadata |
+| `getWorkspaceStats(id, range)` | Task statistics for a workspace |
+| `listTasks(workspaceId, filter?, status?, limit?)` | List tasks in a specific workspace |
+| `listAllTasks(filter?, status?, limit?)` | List tasks across all user workspaces |
+| `createTask(workspaceId, title, body?, assignee?, cronSchedule?)` | Create a task in **any** workspace by ID |
+| `getTask(workspaceId, taskId)` | Fetch a single task |
+| `replyToTask(workspaceId, taskId, text)` | Post a message to a task thread |
+| `respondToTask(workspaceId, taskId, action)` | Submit allow/deny for a permission request |
+| `updateTaskStatus(workspaceId, taskId, status)` | Update task status |
+| `updateTaskOrder(workspaceId, taskId, sortOrder)` | Reorder tasks in a workspace queue |
+| `updateTaskAssignee(workspaceId, taskId, assignee)` | Reassign a task between human and agent |
+| `updateTaskAllowAll(workspaceId, taskId, allowAll)` | Toggle unrestricted permission mode for a task |
+| `updateScheduledTask(workspaceId, taskId, ...)` | Modify a cron task template |
+| `getAttachment(workspaceId, attachmentId)` | Retrieve a file attachment as base64 |
+
+### Per-Workspace / Agent Worker MCP Servers
 
 Each workspace gets its own MCP server instance (`WorkspaceServer`), created lazily on the first agent connection and managed by a central `Manager`. The manager uses a read-write lock and a `map[workspaceID → WorkspaceServer]` for safe concurrent access.
 
-Agents connect via:
+Worker agents connect via:
 - **Path-based**: `POST /mcp/{workspaceID}` (Streamable HTTP transport)
 - **Subdomain-based**: `{workspaceID}.mcp.{domain}`
 
-Authentication uses the workspace's encrypted token (decrypted at request time and compared to the bearer token the agent provides). Once authenticated, the agent communicates with that workspace's MCP server exclusively.
+Authentication uses the workspace's encrypted token (a 16-char secret, AES-GCM encrypted at rest, provided as a bearer token). Once authenticated, the agent communicates with that workspace exclusively — it has no visibility into other workspaces.
 
-### Tool Surface
-
-Every agent connected to a workspace MCP server has access to exactly these tools:
+Every agent connected to a per-workspace MCP server has access to exactly these tools:
 
 | Tool | Description |
 |------|-------------|
@@ -70,7 +100,7 @@ Every agent connected to a workspace MCP server has access to exactly these tool
 | `reply(chatId, text, attachments?)` | Sends a message in a task's conversation thread |
 | `downloadAttachment(attachmentId, taskId)` | Retrieves a file attachment as base64 |
 
-These are the only operations an agent can perform. All state mutations go through the MCP tool layer — there is no direct database access for agents.
+All state mutations go through the MCP tool layer — there is no direct database access for agents.
 
 ---
 
@@ -78,37 +108,44 @@ These are the only operations an agent can perform. All state mutations go throu
 
 ### How a Supervisor Agent Coordinates Workspaces
 
-A supervisor agent coordinates multiple workspaces by **connecting to each workspace's MCP server simultaneously** using that workspace's token. Because MCP is a protocol (not a single connection), a single agent process can hold multiple MCP client sessions — one per workspace — and call tools on any of them.
+A supervisor agent connects to the **Supervisor MCP server** (`coremcp`) via a single OAuth2-authenticated session. This one connection gives the supervisor full cross-workspace control — no need to hold per-workspace tokens or manage multiple MCP sessions simultaneously.
 
 The coordination flow looks like this:
 
 ```
 Supervisor Agent
-├── MCP Session → Workspace A (supervisor's home)
-├── MCP Session → Workspace B (coding agent)
-├── MCP Session → Workspace C (docs agent)
-└── MCP Session → Workspace D (publishing agent)
+└── MCP Session → coremcp (/mcp)                [OAuth2, user-scoped]
+                  ├── listWorkspaces()           → discovers all workspaces + their mcpURL
+                  ├── createTask(workspaceId=B)  → assigns task to coding agent
+                  ├── createTask(workspaceId=C)  → assigns task to docs agent
+                  ├── createTask(workspaceId=D)  → assigns task to publishing agent
+                  └── listTasks(workspaceId)     → monitors progress across any workspace
+
+Worker Agents (one per workspace, each with its own MCP session)
+├── MCP Session → /mcp/{workspaceB}             [workspace token, isolated]
+├── MCP Session → /mcp/{workspaceC}             [workspace token, isolated]
+└── MCP Session → /mcp/{workspaceD}             [workspace token, isolated]
 ```
 
-The supervisor uses `createTask` on each target workspace's MCP session to assign work to the specialist agent in that workspace. It then monitors progress via `getTaskMessages` and reacts to status changes — assembling the outputs of each worker into the next stage of the pipeline.
+The supervisor never touches per-workspace MCP endpoints. It sees everything through the coremcp and uses `createTask(workspaceId, ...)` to delegate subtasks to specialist agents. Each worker agent is entirely isolated within its own workspace MCP server and is unaware of the broader pipeline.
 
 ### Step-by-Step: Supervisor Spawning a Cross-Workspace Workflow
 
 1. **Human → Supervisor**: Human creates a task in the supervisor workspace (via the UI or REST API) with a high-level goal (e.g., "Write, document, and publish the new authentication module").
 
-2. **Supervisor picks up task**: Supervisor agent calls `getNextTask()` on its home workspace. Receives the task. Calls `updateTaskStatus(taskId, "ongoing")`.
+2. **Supervisor picks up task**: The supervisor, connected to `coremcp`, receives the task via the AgentRQ workspace MCP server it also runs in. It calls `updateTaskStatus(workspaceId, taskId, "ongoing")`.
 
-3. **Supervisor calls `getWorkspace()`**: Gets mission context and decompose the high-level goal into subtasks for each specialist workspace.
+3. **Supervisor discovers workspaces**: Supervisor calls `listWorkspaces()` on coremcp. The response includes each workspace's ID, name, description, and `mcpURL` — the URL the specialist worker agent in that workspace is connected to.
 
-4. **Supervisor creates subtasks**: For each specialist workspace (coding, docs, publishing), the supervisor calls `createTask(title, body, assignee="agent")` on that workspace's MCP session. Each call returns a task ID.
+4. **Supervisor creates subtasks**: For each specialist workspace (coding, docs, publishing), the supervisor calls `createTask(workspaceId="...", title="...", body="...", assignee="agent")` on coremcp. Each call creates a task in the target workspace and returns its ID.
 
-5. **Specialist agents work**: Each specialist workspace agent runs its own `getNextTask` → `ongoing` → `reply` → `completed` cycle independently.
+5. **Specialist agents work**: Each specialist workspace agent runs its own `getNextTask` → `ongoing` → `reply` → `completed` cycle independently, entirely within their workspace MCP server.
 
-6. **Supervisor monitors**: Supervisor polls `getTaskMessages(taskId)` on each worker workspace to collect results. When a worker marks its task `completed`, the supervisor reads the final reply and uses that output as input for the next stage.
+6. **Supervisor monitors**: Supervisor calls `listTasks(workspaceId, status="completed")` or `getTask(workspaceId, taskId)` on coremcp to track worker progress. When a worker marks its task `completed`, the supervisor reads the result from the task data and uses it as input for the next stage.
 
-7. **Supervisor chains the pipeline**: Once Stage 1 (coding) completes, supervisor creates Stage 2 (docs) task in the docs workspace, embedding Stage 1's output in the task body. This continues through each stage.
+7. **Supervisor chains the pipeline**: Once Stage 1 (coding) completes, the supervisor creates the Stage 2 (docs) task in the docs workspace, embedding Stage 1's output in the task body. This continues through each stage of the pipeline.
 
-8. **Supervisor reports back**: When all stages are complete, supervisor calls `reply(chatId, summary)` and `updateTaskStatus(supervisorTaskId, "completed")` in its home workspace. Human sees the full result.
+8. **Supervisor reports back**: When all stages are complete, the supervisor calls `replyToTask(workspaceId, supervisorTaskId, summary)` and `updateTaskStatus(workspaceId, supervisorTaskId, "completed")` via coremcp. The human sees the full result in the UI.
 
 ---
 
@@ -136,7 +173,7 @@ Agent
   → CRUD Controller (same validation + persistence path)
   → PubSub event (ActionTaskCreate, ActorAgent, OriginMCP)
   → Central Forwarder → EventBus SSE → Human UI
-  → (if assignee="agent" in another workspace) Supervisor manages via separate MCP session
+  → (if assignee="agent" in another workspace) Supervisor delegates via coremcp createTask(workspaceId, ...)
 ```
 
 ### Agent Task Execution Loop
@@ -226,34 +263,39 @@ Attachments are stored on disk under `./_storage/{attachmentID}` as base64-encod
 ## System Topology
 
 ```
-                        ┌─────────────────────────────┐
-                        │         HTTP Server          │
-                        │  (Fiber, unified port :3000) │
-                        └─────────────┬───────────────┘
-                                      │
-              ┌───────────────────────┼───────────────────────┐
-              │                       │                       │
-    ┌─────────▼──────────┐  ┌────────▼───────────┐  ┌───────▼────────────┐
-    │   REST API         │  │   MCP Handler      │  │   SSE Events       │
-    │ /api/v1/workspaces │  │ /mcp/{workspaceID} │  │ /workspaces/{id}   │
-    │ /api/v1/tasks      │  │                    │  │   /events          │
-    └─────────┬──────────┘  └────────┬───────────┘  └───────┬────────────┘
-              │                       │                       │
-    ┌─────────▼──────────┐  ┌────────▼───────────┐  ┌───────▼────────────┐
-    │   CRUD Controller  │  │   MCP Manager      │  │   EventBus (SSE)   │
-    │  (tasks, workspaces│  │ (per-workspace     │  │  (workspace-scoped │
-    │   messages, perms) │  │  WorkspaceServer)  │  │   in-memory pub/sub│
-    └─────────┬──────────┘  └────────┬───────────┘  └────────────────────┘
-              │                       │                         ▲
-    ┌─────────▼───────────────────────▼──────────┐             │
-    │               Repository (GORM)            │             │
-    │         SQLite  ◄──────────►  PostgreSQL   │             │
-    └────────────────────────────────────────────┘             │
-              │                                                 │
-    ┌─────────▼──────────┐          ┌──────────────────────────┘
-    │   PubSub (internal)│─────────►│  Central Forwarder       │
-    │  CRUD / MCP topics │          │  (PubSub → EventBus)     │
-    └────────────────────┘          └──────────────────────────┘
+                    ┌──────────────────────────────────────┐
+                    │             HTTP Server              │
+                    │      (Fiber, unified port :3000)     │
+                    └──────┬──────────────┬──────┬─────────┘
+                           │              │      │
+              ┌────────────┘    ┌─────────┘      └──────────────┐
+              │                 │                               │
+  ┌───────────▼──────────┐  ┌───▼────────────────────────┐  ┌───▼─────────────────┐
+  │      REST API        │  │   Supervisor MCP (coremcp) │  │    SSE Events       │
+  │  /api/v1/workspaces  │  │   /mcp  •  mcp.{domain}   │  │  /workspaces/{id}   │
+  │  /api/v1/tasks       │  │   OAuth2, user-scoped      │  │    /events          │
+  └───────────┬──────────┘  └───────────┬────────────────┘  └───▲─────────────────┘
+              │                         │                        │
+              │             ┌───────────▼────────────────┐       │
+              │             │  Per-Workspace MCP Servers │       │
+              │             │  /mcp/{workspaceID}        │       │
+              │             │  workspace-token auth       │       │
+              │             └───────────┬────────────────┘       │
+              │                         │                        │
+  ┌───────────▼─────────────────────────▼──────────┐  ┌─────────┴───────────────┐
+  │               CRUD Controller                  │  │    EventBus (SSE)       │
+  │   tasks, workspaces, messages, permissions     │  │    workspace-scoped     │
+  └───────────────────────┬────────────────────────┘  │    in-memory pub/sub    │
+                          │                           └─────────────────────────┘
+  ┌───────────────────────▼────────────────────────┐              ▲
+  │              Repository (GORM)                 │              │
+  │        SQLite  ◄──────────────► PostgreSQL     │              │
+  └───────────────────────┬────────────────────────┘              │
+                          │                                       │
+  ┌───────────────────────▼──────────────┐  ┌────────────────────┴────────┐
+  │         PubSub (internal)            ├─►│     Central Forwarder       │
+  │         CRUD / MCP topics            │  │     (PubSub → EventBus)     │
+  └──────────────────────────────────────┘  └─────────────────────────────┘
 ```
 
 ---
@@ -262,10 +304,11 @@ Attachments are stored on disk under `./_storage/{attachmentID}` as base64-encod
 
 | Boundary | Mechanism |
 |----------|-----------|
-| Agent ↔ MCP Server | Workspace token (AES-GCM encrypted at rest, bearer token in transit) |
+| Supervisor ↔ Core MCP Server | OAuth2 with JWT access token (audience `"coremcp"`, user-scoped; grants cross-workspace access) |
+| Worker Agent ↔ Per-Workspace MCP | Workspace token (AES-GCM encrypted at rest, bearer token in transit; scoped to one workspace) |
 | Human ↔ REST API | JWT (session cookie or Authorization header) |
 | Permission gating | Auto-allow rules + human approval flow via SSE + MCP notification |
-| Workspace isolation | Each MCP server instance is workspace-scoped; no cross-workspace tool calls within a single session |
+| Workspace isolation | Per-workspace MCP servers are scoped exclusively to their workspace; no cross-workspace tool calls within a worker session |
 | Rate limiting | Per-user request counters for tasks, messages, and workspace creation |
 | DDoS protection | Per-IP request counting with configurable block duration |
 
