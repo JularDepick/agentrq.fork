@@ -674,10 +674,10 @@ func (c *controller) GetAttachment(ctx context.Context, req entity.GetAttachment
 
 func (c *controller) saveAttachments(atts []entity.Attachment) {
 	for i := range atts {
-		if atts[i].ID == "" {
-			atts[i].ID = monoflake.ID(c.idgen.NextID()).String()
-		}
 		if atts[i].Data != "" {
+			// Always generate a server-controlled ID; never trust caller-provided IDs.
+			// This prevents slug-keyed files that break the download path.
+			atts[i].ID = monoflake.ID(c.idgen.NextID()).String()
 			_ = c.storage.Save(atts[i].ID, atts[i].Data)
 			atts[i].Data = "" // clear from metadata
 		}

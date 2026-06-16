@@ -318,11 +318,12 @@ func TestRespondToTask_Allow(t *testing.T) {
 	e.repo.EXPECT().GetWorkspace(gomock.Any(), int64(1), testUserID).Return(activeWorkspace(), nil)
 	e.repo.EXPECT().GetTask(gomock.Any(), int64(1), int64(10), testUserID).Return(task, nil)
 	e.repo.EXPECT().ListTasks(gomock.Any(), gomock.Any(), testUserID).Return([]model.Task{task}, nil)
-	e.idgen.EXPECT().NextID().Return(int64(100))
+	e.idgen.EXPECT().NextID().Return(int64(100)) // attachment ID (always server-generated)
+	e.idgen.EXPECT().NextID().Return(int64(101)) // message ID
+	e.storage.EXPECT().Save(gomock.Any(), "data1").Return(nil)
 	e.repo.EXPECT().CreateMessage(gomock.Any(), gomock.Any()).Return(nil)
 	e.repo.EXPECT().UpdateTask(gomock.Any(), gomock.Any()).Return(updated, nil)
 	e.repo.EXPECT().GetTask(gomock.Any(), int64(1), int64(10), testUserID).Return(updated, nil)
-	e.storage.EXPECT().Save("att1", "data1").Return(nil)
 
 	resp, err := e.controller.RespondToTask(context.Background(), entity.RespondToTaskRequest{
 		WorkspaceID: 1, TaskID: 10, Action: "allow", UserID: testUserIDStr,
