@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -8,7 +9,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const ClaimsContextKey = "mcp_claims"
+type ctxKey uint8
+
+const (
+	CtxKeyMCPClaims    ctxKey = 1
+	ActorHumanAudience        = "actor:human"
+)
 
 type TokenConfig struct {
 	JWTSecret string `yaml:"jwt_secret"`
@@ -55,6 +61,7 @@ func (s *tokenService) CreateToken(userID, email, name, picture string) (string,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			Audience:  jwt.ClaimStrings{ActorHumanAudience},
 		},
 		Email:   email,
 		Name:    name,
@@ -82,6 +89,26 @@ func (s *tokenService) CreateMCPToken(userID, workspaceID, tokenType string) (st
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.secret)
+}
+
+func HasAudience(claims *Claims, audience string) bool {
+	if claims == nil {
+		return false
+	}
+	for _, aud := range claims.Audience {
+		if aud == audience {
+			return true
+		}
+	}
+	return false
+}
+
+func ContextHasAudience(ctx context.Context, audience string) bool {
+	if ctx == nil {
+		return false
+	}
+	claims, _ := ctx.Value(CtxKeyMCPClaims).(*Claims)
+	return HasAudience(claims, audience)
 }
 
 func (s *tokenService) CreateOAuthCodeToken(userID, workspaceID string) (string, error) {
