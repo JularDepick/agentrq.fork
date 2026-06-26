@@ -1,10 +1,16 @@
-# AgentRQ 中文文档
+# AgentRQ ── 智能体-人类协作平台
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-red"/></a>
+  <img src="https://img.shields.io/badge/Service-MCP-blue"/>
+  <img src="https://img.shields.io/badge/Auth-Google_OAuth2-green"/>
+  <br />
+  <br />
   <a href="README.md">English</a>
+  | 简体中文
   <br />
   <br />
-  <a href="https://www.youtube.com/watch?v=GBAoSpuCzrU">Watch on YouTube in HD</a>
+  <a href="https://www.youtube.com/watch?v=GBAoSpuCzrU">在 YouTube 上观看高清介绍视频</a>
   <br />
   <br />
   <a href="https://discord.gg/xFSMaEA2b2">
@@ -20,11 +26,9 @@
 
 ## AgentRQ 是什么
 
-AgentRQ 是一个面向“人类操作者 + AI Agent”的协作平台。它不是模型本身，也不是某个 Agent CLI 的替代品，而是提供一个可视化工作区，让人和 Agent 围绕任务、状态、消息、权限请求、附件和通知协同。
+AgentRQ 是一个面向 **“人类操作者 + AI Agent”** 的协作平台。它不是模型本身，也不是某个 Agent CLI 的替代品，而是提供一个可视化工作区，让人和 Agent 围绕任务、状态、消息、权限请求、附件和通知协同。
 
-AI Agent 通过 MCP 连接到工作区：读取任务、更新状态、回复消息、下载附件或创建新任务；人类则通过 Web UI 观察进度、补充信息或处理需要批准的操作。
-
-官方 README 没有说明 “RQ” 的展开含义，本文不做额外定义。可以把它理解为围绕任务队列或请求队列组织 Agent 工作流的产品名。
+AI Agent 通过 **MCP** 连接到工作区：读取任务、更新状态、回复消息、下载附件或创建新任务；人类则通过 **Web UI** 观察进度、补充信息或处理需要批准的操作。
 
 ## 适合谁使用
 
@@ -74,21 +78,21 @@ AgentRQ 有两层 MCP：
 
 AgentRQ 采用前后端分离和 MCP 服务层组合的架构。
 
-### Backend
+### 后端 (Go / Fiber)
 
-- Go + Fiber 提供 REST API。
-- 集成 MCP server，暴露 Workspace MCP 和 CoreMCP。
-- GORM 管理数据访问，默认可使用 SQLite，自托管生产环境建议使用 PostgreSQL。
-- Google OAuth2 和 JWT 负责用户认证。
-- 内部 Pub/Sub 与 SSE 负责实时事件同步。
+- **API服务**：由 Go + Fiber 提供 REST API。
+- **MCP服务**： 集成 MCP server，暴露 Workspace MCP 和 CoreMCP。
+- **数据管理**：以Go语言的 GORM 框架管理数据访问，默认可使用 SQLite 数据库，自托管生产环境建议使用 PostgreSQL 数据库。
+- **用户认证**：Google OAuth2 和 JWT 负责用户认证。
+- **事件同步**： 内部 Pub/Sub 与 SSE 负责实时事件同步。
 - 可选集成 Slack、SMTP、Web Push 等通知能力。
 
-### Frontend
+### 前端 (Vue.js 3 / Vite)
 
-- Vue 3 + Vite 构建前端应用。
-- Pinia 管理状态。
-- Tailwind CSS 提供样式。
-- 通过 SSE 接收后端实时事件，保持任务和消息同步。
+- **图形界面**：Vue 3 + Vite 构建前端应用。
+- **状态管理**：Pinia 管理状态。
+- **样式设计**：Tailwind CSS 提供样式。
+- **前后端通信**：通过 SSE 接收后端实时事件，保持任务和消息同步。
 
 更多设计细节见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
@@ -148,7 +152,7 @@ AGENTRQ_ACCOUNTS_OAUTH2_CLI_GOOGLE_CLIENT_SECRET=your-client-secret
 
 ### 源码开发
 
-源码开发需要：
+源码开发需要以下环境：
 
 - Go 1.21+
 - Node.js 18+ 和 npm
@@ -309,7 +313,7 @@ gemini extensions install https://github.com/agentrq/agentrq-gemini-extension
 
 集成能力包括：
 
-- [Slack Integration](integrations/slack/README.md)
+- [Slack 集成](integrations/slack/README.md)
 - SMTP 邮件通知
 - Web Push / PWA 原生推送
 
@@ -333,7 +337,7 @@ gemini extensions install https://github.com/agentrq/agentrq-gemini-extension
 
 ### RQ 是什么意思？
 
-仓库当前文档没有给出官方展开。不要在文档或 PR 描述中擅自定义它；可以把 AgentRQ 当作产品名理解。
+官方 README 没有说明 “RQ” 的展开含义，本文不做额外定义，不要在文档或 PR 描述中擅自定义它；可以把它理解为围绕任务队列或请求队列组织 Agent 工作流的产品名。
 
 ## 贡献指南
 
@@ -345,4 +349,10 @@ gemini extensions install https://github.com/agentrq/agentrq-gemini-extension
 4. 提交前检查 Markdown 链接和格式。
 5. PR 标题可以使用 `docs: add Simplified Chinese README`。
 
-许可证见英文 [README.md](README.md) 的 License 部分。
+## 相关链接
+
+- 官方网站：[AgentRQ](https://agentrq.com)
+- MCP支持：[HasMCP](https://hasmcp.com)
+
+## 许可证
+[Apache-2.0](LICENSE)
